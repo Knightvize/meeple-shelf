@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meeple Shelf</title>
+<style>
+:root{--bg:#faf6ef;--card:#fff;--ink:#2b2118;--mute:#7a6a5a;--line:#e6dccd;--acc:#c2410c;--accink:#fff;--star:#e0a100;--ok:#15803d;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1511;--card:#261e18;--ink:#f3eadf;--mute:#a8998a;--line:#3a2f26;--acc:#f97316;--accink:#1b1511;--star:#f5b800;--ok:#4ade80;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1b1511;--card:#261e18;--ink:#f3eadf;--mute:#a8998a;--line:#3a2f26;--acc:#f97316;--accink:#1b1511;--star:#f5b800;--ok:#4ade80;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,"Times New Roman",serif;line-height:1.45}
+main{max-width:680px;margin:0 auto;padding:18px 16px 56px}
+h1{font-size:26px;margin:0}
+.ui,button,input,select,textarea{font-family:system-ui,sans-serif}
+.sub{color:var(--mute);font:14px system-ui,sans-serif;margin:2px 0 14px}
+.banner{background:var(--card);border:1px dashed var(--acc);border-radius:12px;padding:10px 12px;font:13px system-ui,sans-serif;margin-bottom:14px}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px}
+.tabs button,.chips button{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:999px;font-size:14px;font-weight:600}
+.tabs button.on,.chips button.on{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+.chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px}
+.chips button{padding:5px 11px;font-size:13px}
+.dot{background:var(--acc);color:var(--accink);border-radius:999px;font-size:11px;padding:1px 6px;margin-left:5px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:16px;margin-bottom:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+.card h3{margin:0 0 2px;font-size:18px}
+.meta{color:var(--mute);font:13px system-ui,sans-serif}
+.btn{background:var(--acc);color:var(--accink);border:0;border-radius:8px;padding:9px 14px;font-size:14px;font-weight:600}
+.btn.ghost{background:none;color:var(--acc);border:1px solid var(--acc)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.stars span{font-size:28px;cursor:pointer;color:var(--line);padding:0 2px}
+.stars span.f,.ro span.f{color:var(--star)}
+.ro{font-size:17px;letter-spacing:1px;color:var(--line)}
+.badge{display:inline-block;font:600 11px system-ui,sans-serif;text-transform:uppercase;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin-right:6px}
+.new{border-left:4px solid var(--acc)}.unread{background:color-mix(in srgb,var(--acc) 8%,var(--card))}
+.ok{color:var(--ok);font:600 14px system-ui,sans-serif}
+.empty{text-align:center;color:var(--mute);padding:26px 0;font-family:system-ui,sans-serif}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);width:min(92vw,420px)}
+dialog::backdrop{background:#0008}
+footer{color:var(--mute);font:12px system-ui,sans-serif;text-align:center;margin-top:28px}
+footer a{color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+<h1>♟ Meeple Shelf</h1>
+<p class="sub">Shelve, rate, and review board games, and hear about new games from series and designers you’ve played.</p>
+<div id="banner"></div>
+<div class="tabs" id="tabs"></div>
+<div id="view"></div>
+<footer id="foot"></footer>
+</main>
+<dialog id="dlg"></dialog>
+<script>
+var $=function(s){return document.querySelector(s)};
+var esc=function(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})};
+var ST={want:"Want to play",own:"Own it",played:"Played"};
+var view="discover",filter="all",mode="demo",api,unread=0,flash="";
+
+/* ---------- Demo mode: fictional catalog + local matching (mirrors worker/notify.js) ---------- */
+var SEED=[
+{id:1,title:"Castle Quest",year_published:2019,designers:["Ana Ruiz"],families:["Castle Quest"]},
+{id:2,title:"Castle Quest: Dragon Age",year_published:2020,designers:["Ana Ruiz"],families:["Castle Quest"]},
+{id:3,title:"Orchard Rush",year_published:2018,designers:["Ben Okafor"],families:["Orchard Rush"]},
+{id:4,title:"Tidal Merchants",year_published:2021,designers:["Ana Ruiz"],families:[]},
+{id:5,title:"Lantern Heist",year_published:2022,designers:["Mia Chen"],families:["Lantern Heist"]},
+{id:6,title:"Starlight Express",year_published:2017,designers:["Mia Chen"],families:[]}];
+var UPCOMING=[
+{title:"Castle Quest: Frozen Keep",designers:["Ana Ruiz"],families:["Castle Quest"]},
+{title:"Tidal Merchants 2",designers:["Ana Ruiz"],families:[]},
+{title:"Lantern Heist: Midnight",designers:["Mia Chen"],families:["Lantern Heist"]},
+{title:"Cactus Crossing",designers:["Pat Lee"],families:[]}];
+var KEY="meeple-demo-v2",S;
+try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!S)S={games:SEED.slice(),shelf:{},notes:[],next:0,nid:1};
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function gb(id){return S.games.filter(function(g){return g.id==id})[0]}
+var demo={
+ games:function(q){return Promise.resolve(S.games.filter(function(g){return g.title.toLowerCase().indexOf(q.toLowerCase())>=0}))},
+ shelf:function(){return Promise.resolve(Object.keys(S.shelf).map(function(id){return Object.assign({},gb(id),S.shelf[id])}))},
+ shelve:function(id,e){S.shelf[id]=e;save();return Promise.resolve()},
+ unshelve:function(id){delete S.shelf[id];save();return Promise.resolve()},
+ notes:function(){return Promise.resolve(S.notes.slice().reverse().map(function(n){return Object.assign({},n,{title:gb(n.game).title,because_of:gb(n.old).title})}))},
+ read:function(){S.notes.forEach(function(n){n.read_at=1});save();return Promise.resolve()},
+ release:function(){
+  var u=UPCOMING[S.next];if(!u)return null;
+  var g=Object.assign({id:S.games.length+1,year_published:new Date().getFullYear()},u);S.games.push(g);S.next++;
+  var hit=null;
+  Object.keys(S.shelf).forEach(function(id){var e=S.shelf[id];if(e.status!=="own"&&e.status!=="played")return;
+   var o=gb(id),fam=o.families.some(function(f){return g.families.indexOf(f)>=0}),des=o.designers.some(function(d){return g.designers.indexOf(d)>=0});
+   if(!fam&&!des)return;var reason=fam?"same_family":"same_designer",r=e.rating||0;
+   if(!hit||(reason==="same_family"&&hit.reason!=="same_family")||(reason===hit.reason&&r>hit.r))hit={old:+id,reason:reason,r:r}});
+  if(hit&&!S.shelf[g.id])S.notes.push({id:S.nid++,game:g.id,old:hit.old,reason:hit.reason,read_at:null});
+  save();return{game:g,hit:hit};
+ }};
+
+/* ---------- Real mode: talks to the Express API in this project ---------- */
+function call(m,p,b){var h={"Content-Type":"application/json"},t=localStorage.getItem("tok");if(t)h.Authorization="Bearer "+t;
+ return fetch(p,{method:m,headers:h,body:b?JSON.stringify(b):undefined}).then(function(r){if(r.status===401){login();throw new Error("auth")}return r.json()})}
+var remote={games:function(q){return call("GET","/games?q="+encodeURIComponent(q))},shelf:function(){return call("GET","/me/shelf")},
+ shelve:function(id,e){return call("PUT","/me/shelf/"+id,e)},unshelve:function(id){return call("DELETE","/me/shelf/"+id)},
+ notes:function(){return call("GET","/me/notifications")},read:function(){return call("POST","/me/notifications/read")}};
+function login(){
+ $("#dlg").innerHTML='<h3 style="margin-top:0">Sign in</h3><input id="le" type="email" placeholder="Email"><input id="ln" placeholder="Display name (new accounts)"><input id="lp" type="password" placeholder="Password (8+ characters)"><div class="ui meta" id="lm"></div><div class="row"><button class="btn" data-a="in">Sign in</button><button class="btn ghost" data-a="up">Create account</button></div>';
+ if(!$("#dlg").open)$("#dlg").showModal()}
+function auth(kind){
+ var b={email:$("#le").value,password:$("#lp").value,displayName:$("#ln").value};
+ fetch(kind==="up"?"/auth/register":"/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)})
+ .then(function(r){return r.json()}).then(function(d){if(d.token){localStorage.setItem("tok",d.token);$("#dlg").close();go(view)}else $("#lm").textContent=d.error||"Failed"})}
+
+/* ---------- UI ---------- */
+function stars(n,cls){var h="";for(var i=1;i<=5;i++)h+='<span class="'+(i<=n?"f":"")+'" data-i="'+i+'">★</span>';return '<div class="'+cls+'">'+h+'</div>'}
+function tabs(){var T=[["discover","Discover"],["shelf","My shelf"],["new","New for you"+(unread?'<span class="dot">'+unread+"</span>":"")]];
+ if(mode==="real"&&isAdmin())T.push(["admin","Admin"]);
+ $("#tabs").innerHTML=T.map(function(t){return '<button data-v="'+t[0]+'" class="'+(t[0]===view?"on":"")+'">'+t[1]+"</button>"}).join("")}
+function banner(){
+ if(mode!=="demo"){$("#banner").innerHTML="";return}
+ var u=UPCOMING[S.next];
+ $("#banner").innerHTML='<div class="banner"><b>Demo mode</b>: everything runs in your browser with a made-up catalog. To test alerts: shelve a game as <i>Played</i> or <i>Own it</i>, then release a new game.<div class="row" style="margin-top:8px">'+
+ (u?'<button class="btn" data-a="rel">Release: '+esc(u.title)+'</button><span class="meta">'+(u.families.length?"Series: "+esc(u.families[0])+" · ":"")+"Designer: "+esc(u.designers[0])+"</span>":'<span class="meta">All sample releases used.</span>')+
+ '<button class="btn ghost" data-a="reset">Reset demo</button></div>'+(flash?'<div class="ok" style="margin-top:8px">'+flash+"</div>":"")+"</div>"}
+function go(v){view=v;flash=flash;render()}
+function render(){
+ tabs();banner();
+ api.notes().then(function(n){unread=n.filter(function(x){return !x.read_at}).length;tabs();return n}).then(function(n){
+  if(view==="discover")return discover("");
+  if(view==="shelf")return shelf();
+  if(view==="admin")return adminView();
+  return notes(n)}).catch(function(){});
+}
+function gameCard(g,extra){
+ return '<div class="card"><h3>'+esc(g.title)+'</h3><div class="meta">'+(g.year_published||"")+(g.designers&&g.designers.length?" · "+esc(g.designers.join(", ")):"")+(g.avg_rating?" · avg "+g.avg_rating+"★":"")+"</div>"+(extra||"")+"</div>"}
+function discover(q){
+ $("#view").innerHTML='<input id="q" placeholder="Search games" value="'+esc(q)+'"><div id="res"></div>';
+ api.games(q).then(function(gs){$("#res").innerHTML=gs.length?gs.map(function(g){return gameCard(g,'<div class="row" style="margin-top:8px"><button class="btn" data-sh="'+g.id+'" data-t="'+esc(g.title)+'">Shelve</button></div>')}).join(""):'<div class="empty">No games found.</div>'})}
+function shelf(){
+ api.shelf().then(function(items){
+  var list=items.filter(function(g){return filter==="all"||g.status===filter});
+  var chips='<div class="chips">'+["all","played","own","want"].map(function(k){return '<button data-f="'+k+'" class="'+(k===filter?"on":"")+'">'+(k==="all"?"All":ST[k])+"</button>"}).join("")+"</div>";
+  $("#view").innerHTML=chips+(list.length?list.map(function(g){return gameCard(g,'<div style="margin-top:6px"><span class="badge">'+ST[g.status]+"</span>"+(g.rating?stars(g.rating,"ro").replace("<div","<span").replace("</div>","</span>"):"")+"</div>"+(g.review?'<p style="margin:6px 0 0">'+esc(g.review)+"</p>":"")+
+   '<div class="row" style="margin-top:8px"><button class="btn ghost" data-sh="'+g.id+'" data-t="'+esc(g.title)+'" data-s="'+g.status+'" data-r="'+(g.rating||0)+'" data-rv="'+esc(g.review||"")+'">Edit</button><button class="btn ghost" data-rm="'+g.id+'">Remove</button></div>')}).join(""):'<div class="empty">Nothing on this shelf yet.</div>')})}
+function notes(n){
+ $("#view").innerHTML=(n.length?'<div class="row" style="margin-bottom:10px"><button class="btn ghost" data-a="read">Mark all read</button></div>':"")+
+ (n.length?n.map(function(x){return '<div class="card new '+(x.read_at?"":"unread")+'"><h3>New: '+esc(x.title)+'</h3><div class="meta">'+(x.reason==="same_family"?"Same series as ":"Same designer as ")+"<b>"+esc(x.because_of)+"</b>, which you’ve played or own.</div></div>"}).join(""):'<div class="empty">No alerts yet. When a new game appears from a series or designer you’ve played or own, it shows up here.</div>')}
+function isAdmin(){try{return !!JSON.parse(atob(localStorage.getItem("tok").split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).admin}catch(e){return false}}
+function adminView(){
+ $("#view").innerHTML='<div class="card"><h3>Add a game</h3><input id="at" placeholder="Title"><input id="ay" placeholder="Year (e.g. 2026)" inputmode="numeric"><input id="ad" placeholder="Designers (comma separated)"><input id="af" placeholder="Series (comma separated)"><input id="ai" placeholder="Picture web address (optional)"><button class="btn" data-a="addgame">Add game</button><div class="meta" id="am" style="margin-top:6px"></div></div><div class="card"><h3>Game updates</h3><p class="meta">The site checks for new games and sends alerts every hour. You can run it now.</p><button class="btn ghost" data-a="runupd">Run update now</button><div class="meta" id="au" style="margin-top:6px"></div></div>'}
+var cur={id:null,r:0};
+function editor(id,t,s,r,rv){
+ cur={id:id,r:+r||0};
+ $("#dlg").innerHTML='<h3 style="margin-top:0">'+esc(t)+'</h3><select id="es"><option value="played">Played</option><option value="own">Own it</option><option value="want">Want to play</option></select><div id="est">'+stars(cur.r,"stars")+'</div><textarea id="er" rows="3" placeholder="Your review (optional)">'+esc(rv||"")+'</textarea><div class="row"><button class="btn" data-a="save">Save</button><button class="btn ghost" data-a="x">Cancel</button></div>';
+ $("#es").value=s||"played";$("#dlg").showModal()}
+document.addEventListener("click",function(e){
+ var t=e.target,d=t.dataset||{};
+ if(d.v){view=d.v;render()}
+ if(d.f){filter=d.f;shelf()}
+ if(d.sh)editor(d.sh,d.t,d.s,d.r,d.rv);
+ if(d.rm)api.unshelve(d.rm).then(render);
+ if(t.closest&&t.closest("#est")&&t.dataset.i){cur.r=cur.r==+t.dataset.i?0:+t.dataset.i;$("#est").innerHTML=stars(cur.r,"stars")}
+ if(d.a==="save")api.shelve(cur.id,{status:$("#es").value,rating:cur.r||null,review:$("#er").value.trim()||null}).then(function(){$("#dlg").close();render()});
+ if(d.a==="x")$("#dlg").close();
+ if(d.a==="addgame")call("POST","/admin/games",{title:$("#at").value,year:$("#ay").value,designers:$("#ad").value,families:$("#af").value,image:$("#ai").value}).then(function(r){$("#am").textContent=r.id?"Added.":(r.error||"Failed");if(r.id)["at","ay","ad","af","ai"].forEach(function(i){$("#"+i).value=""})});
+ if(d.a==="runupd"){$("#au").textContent="Running...";call("POST","/admin/run-update").then(function(r){$("#au").textContent=r.ok?"Done. Check New for you and Discover.":(r.error||"Failed")})}
+ if(d.a==="read")api.read().then(render);
+ if(d.a==="in"||d.a==="up")auth(d.a);
+ if(d.a==="reset"){try{localStorage.removeItem(KEY)}catch(x){}S={games:SEED.slice(),shelf:{},notes:[],next:0,nid:1};flash="";view="discover";render()}
+ if(d.a==="rel"){var r=demo.release();
+  if(r)flash=r.hit?"Released “"+esc(r.game.title)+"”. You’d get an alert because you’ve played or own “"+esc(gb(r.hit.old).title)+"” ("+(r.hit.reason==="same_family"?"same series":"same designer")+"). Check New for you.":"Released “"+esc(r.game.title)+"”. No alert: nothing you’ve played or own is related.";
+  render()}
+});
+document.addEventListener("input",function(e){if(e.target.id==="q")discover(e.target.value)});
+
+/* ---------- Start: use the real API if it answers, otherwise demo ---------- */
+function start(real){
+ mode=real?"real":"demo";api=real?remote:demo;
+ $("#foot").innerHTML=real?'Powered by <a href="https://boardgamegeek.com">BGG</a>':"Demo data is fictional.";
+ render()}
+var ctl=new AbortController(),tm=setTimeout(function(){ctl.abort()},1500);
+fetch("/health",{signal:ctl.signal}).then(function(r){return r.json()}).then(function(d){clearTimeout(tm);start(!!(d&&d.ok))}).catch(function(){start(false)});
+</script>
+</body>
+</html>
